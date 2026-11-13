@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zine → Carosello Instagram</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f1ec; --ink:#1d1b18; --muted:#6f6a62; --line:#ddd6cb; --card:#fffdf9;
+    --accent:#d94f2b; --accent-ink:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{padding:28px 24px 8px;max-width:1100px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--muted);margin:0}
+  main{max-width:1100px;margin:0 auto;padding:16px 24px 60px}
+  .drop{border:2px dashed var(--line);border-radius:14px;background:var(--card);padding:34px 20px;text-align:center;cursor:pointer;transition:.15s}
+  .drop:hover,.drop.over{border-color:var(--accent);background:#fff7f3}
+  .drop strong{display:block;font-size:17px;margin-bottom:4px}
+  .drop small{color:var(--muted)}
+  input[type=file]{display:none}
+  section{margin-top:22px}
+  h2{font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;font-weight:600}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:end}
+  .ctl{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+  .ctl select,.ctl input[type=number]{font:inherit;color:var(--ink);padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;min-width:90px}
+  .ctl input[type=color]{width:46px;height:32px;border:1px solid var(--line);border-radius:8px;padding:2px;background:#fff}
+  .ctl label.chk{display:flex;gap:6px;align-items:center;color:var(--ink);font-size:14px;padding:6px 0}
+  .sheet-wrap{position:relative;margin-top:14px;display:inline-block;max-width:100%}
+  .sheet-wrap canvas{display:block;max-width:100%;height:auto;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  .grid-ov{position:absolute;inset:0;display:grid}
+  .cell{border:1px dashed rgba(217,79,43,.65);position:relative;display:flex;align-items:flex-start;justify-content:flex-start;padding:4px;gap:4px}
+  .cell select{font:600 12px system-ui;border:1px solid var(--accent);border-radius:6px;background:#fff;color:var(--accent);padding:1px 2px}
+  .cell button{font:600 12px system-ui;border:1px solid var(--accent);border-radius:6px;background:#fff;color:var(--accent);padding:1px 6px;cursor:pointer}
+  .cell .rot{position:absolute;right:4px;bottom:4px;font:11px system-ui;color:var(--accent);background:#fff;border-radius:4px;padding:0 4px}
+  .hint{color:var(--muted);font-size:13px;margin:10px 0 0}
+  .out{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px}
+  .tile img{width:100%;aspect-ratio:4/5;object-fit:contain;border-radius:6px;background:#ddd;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+  .tile .row{display:flex;justify-content:space-between;align-items:center;font-size:13px}
+  .btn{font:600 14px system-ui;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.small{padding:4px 10px;font-size:12px;border-radius:7px}
+  .btn:disabled{opacity:.5;cursor:default}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  .status{font-size:13px;color:var(--muted)}
+  .status.err{color:#b3261e}
+  .hidden{display:none!important}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{font:inherit;font-size:13px;border:0;background:#fff;padding:6px 10px;cursor:pointer;color:var(--ink)}
+  .seg button.on{background:var(--ink);color:#fff}
+</style>
+</head>
+<body>
+<header>
+  <h1>Zine A7 → <span>carosello Instagram</span></h1>
+  <p class="sub">Carica il PDF A4 del libretto pieghevole da 8 pagine: ogni pagina diventa un JPEG 4:5 (1080×1350) con cornice.</p>
+</header>
+<main>
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept="application/pdf,.pdf">
+    <strong>Trascina qui il PDF o clicca per sceglierlo</strong>
+    <small>Il file resta sul tuo dispositivo: l'elaborazione avviene nel browser.</small>
+  </label>
+  <p class="status" id="status"></p>
+
+  <section id="layoutSec" class="hidden">
+    <h2>1 · Riconoscimento pagine</h2>
+    <div class="panel">
+      <div class="controls">
+        <div class="ctl">Modalità
+          <select id="mode">
+            <option value="sheet">Foglio A4 imposto (4×2)</option>
+            <option value="pages">PDF già a pagine singole</option>
+          </select>
+        </div>
+        <div class="ctl" id="sheetRotCtl">Rotazione foglio
+          <select id="sheetRot">
+            <option value="0">0°</option><option value="90">90°</option>
+            <option value="180">180°</option><option value="270">270°</option>
+          </select>
+        </div>
+        <div class="ctl" id="pdfPageCtl">Pagina del PDF
+          <select id="pdfPage"></select>
+        </div>
+      </div>
+      <div id="sheetBox">
+        <div class="sheet-wrap" id="sheetWrap">
+          <canvas id="sheetCanvas"></canvas>
+          <div class="grid-ov" id="gridOv"></div>
+        </div>
+        <p class="hint">Ordine fisso: si parte dalla copertina (in basso, seconda da sinistra) e si procede in senso antiorario. La riga in alto viene raddrizzata (180°); usa ↻ per correggere la rotazione di una singola pagina.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="styleSec" class="hidden">
+    <h2>2 · Cornice</h2>
+    <div class="panel controls">
+      <div class="ctl">Formato
+        <select id="size">
+          <option value="1080">1080 × 1350 (standard)</option>
+          <option value="1440">1440 × 1800 (alta risoluzione)</option>
+          <option value="2160">2160 × 2700 (massima)</option>
+        </select>
+      </div>
+      <div class="ctl">Margine minimo (%)
+        <input type="number" id="margin" min="0" max="30" step="1" value="6">
+      </div>
+      <div class="ctl">Colore cornice
+        <input type="color" id="bg" value="#ffffff">
+      </div>
+      <div class="ctl">Qualità JPEG
+        <select id="quality">
+          <option value="0.95">Alta (95)</option>
+          <option value="0.9" selected>Buona (90)</option>
+          <option value="0.82">Leggera (82)</option>
+        </select>
+      </div>
+      <div class="ctl">Linee di taglio
+        <select id="clean">
+          <option value="auto">Rimuovi automaticamente</option>
+          <option value="off">Lascia com'è</option>
+        </select>
+      </div>
+      <div class="ctl">Rifilo extra (mm)
+        <input type="number" id="trim" min="0" max="8" step="0.5" value="0">
+      </div>
+      <div class="ctl"><label class="chk"><input type="checkbox" id="shadow"> Ombra leggera</label></div>
+      <div class="ctl"><label class="chk"><input type="checkbox" id="stroke"> Filetto grigio</label></div>
+    </div>
+  </section>
+
+  <section id="outSec" class="hidden">
+    <h2>3 · Carosello</h2>
+    <div class="bar">
+      <button class="btn" id="zipBtn">Scarica tutte (ZIP)</button>
+      <span class="status" id="dlStatus"></span>
+    </div>
+    <div class="out" id="out"></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const pdfjs = window.pdfjsLib;
+  const status = (msg, err) => { $('status').textContent = msg || ''; $('status').className = 'status' + (err ? ' err' : ''); };
+  if (!pdfjs) { status('Impossibile caricare il lettore PDF. Ricarica la pagina.', true); return; }
+  // Worker: lo script del worker è già caricato in pagina (window.pdfjsWorker), pdf.js lo usa senza Web Worker esterno.
+  pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const COLS = 4, ROWS = 2;
+  // Ordine fisso: copertina = cella in basso, 2ª da sinistra; poi senso antiorario
+  // (basso verso destra, su a destra, alto verso sinistra, giù a sinistra).
+  // Celle: 0-3 riga alta (capovolta), 4-7 riga bassa.
+  //   alto:  7 6 5 4   (ruotate 180°)
+  //   basso: 8 1 2 3
+  const ORDER = { num: [7,6,5,4, 8,1,2,3], rot: [180,180,180,180, 0,0,0,0] };
+  const state = {
+    pdf: null, baseName: 'zine',
+    cells: { num: [...ORDER.num], rot: [...ORDER.rot] },
+    sheetCanvas: null,       // render ad alta risoluzione del foglio
+    pageCanvases: [],         // canvas sorgenti in modalità "pages"
+    outputs: [],              // [{n, blob, url}]
+  };
+  let downloads = null;
+  (async () => { try { if (window.claude && claude.use) downloads = await claude.use('downloads'); } catch(e) {} })();
+
+  // ---------- caricamento ----------
+  const drop = $('drop');
+  ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', ev => { const f = ev.dataTransfer.files[0]; if (f) load(f); });
+  $('file').addEventListener('change', ev => { const f = ev.target.files[0]; if (f) load(f); });
+
+  async function load(file) {
+    try {
+      status('Lettura del PDF…');
+      state.baseName = (file.name || 'zine').replace(/\.pdf$/i, '').replace(/[^\w\-]+/g, '_') || 'zine';
+      const buf = await file.arrayBuffer();
+      state.pdf = await pdfjs.getDocument({ data: buf }).promise;
+      const n = state.pdf.numPages;
+      $('pdfPage').innerHTML = Array.from({length:n}, (_,i) => `<option value="${i+1}">${i+1} di ${n}</option>`).join('');
+      // auto-rilevamento modalità
+      const p1 = await state.pdf.getPage(1);
+      const vp = p1.getViewport({ scale: 1 });
+      const ratio = Math.max(vp.width, vp.height) / Math.min(vp.width, vp.height);
+      const looksA4 = Math.abs(ratio - Math.SQRT2) < 0.06 && Math.max(vp.width, vp.height) > 700; // ~842pt
+      $('mode').value = (n >= 8 && !looksA4) ? 'pages' : 'sheet';
+      $('sheetRot').value = vp.width >= vp.height ? '0' : '90';
+      ['layoutSec','styleSec','outSec'].forEach(id => $(id).classList.remove('hidden'));
+      await refreshSource();
+      status(`PDF caricato: ${n} pagin${n===1?'a':'e'}, ${Math.round(vp.width/72*25.4)}×${Math.round(vp.height/72*25.4)} mm.`);
+    } catch (e) {
+      console.error(e); status('Non riesco a leggere questo PDF: ' + (e.message || e), true);
+    }
+  }
+
+  // ---------- sorgente ----------
+  async function renderPage(num, rotationExtra, targetPx) {
+    const page = await state.pdf.getPage(num);
+    const rotation = ((page.rotate || 0) + rotationExtra) % 360;
+    const vp1 = page.getViewport({ scale: 1, rotation });
+    let scale = targetPx(vp1);
+    const maxPx = 16e6; // limite prudente per i canvas su mobile
+    if (vp1.width * vp1.height * scale * scale > maxPx) scale = Math.sqrt(maxPx / (vp1.width * vp1.height));
+    const vp = page.getViewport({ scale, rotation });
+    const c = document.createElement('canvas');
+    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    c.pxPerMm = scale * 72 / 25.4;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    return c;
+  }
+
+  async function refreshSource() {
+    const mode = $('mode').value;
+    $('sheetRotCtl').classList.toggle('hidden', mode !== 'sheet');
+    $('pdfPageCtl').classList.toggle('hidden', mode !== 'sheet' || state.pdf.numPages < 2);
+    $('sheetBox').classList.toggle('hidden', mode !== 'sheet');
+    const outH = +$('size').value * 1.25;
+    if (mode === 'sheet') {
+      status('Rendering del foglio…');
+      // ogni cella deve essere alta almeno quanto l'immagine finale
+      state.sheetCanvas = await renderPage(+$('pdfPage').value, +$('sheetRot').value,
+        vp => (outH * ROWS) / vp.height * 1.05);
+      const sc = state.sheetCanvas;
+      if (sc.width < sc.height) status('Attenzione: il foglio risulta verticale. Prova un’altra rotazione del foglio.', true);
+      else status('');
+      drawSheetPreview();
+    } else {
+      status('Rendering delle pagine…');
+      const n = Math.min(state.pdf.numPages, 40);
+      state.pageCanvases = [];
+      for (let i = 1; i <= n; i++) state.pageCanvases.push(await renderPage(i, 0, vp => outH / vp.height * 1.05));
+      status('');
+    }
+    await buildOutputs();
+  }
+
+  function drawSheetPreview() {
+    const src = state.sheetCanvas, pc = $('sheetCanvas');
+    const w = Math.min(1000, src.width);
+    pc.width = w; pc.height = Math.round(src.height * w / src.width);
+    pc.getContext('2d').drawImage(src, 0, 0, pc.width, pc.height);
+    const ov = $('gridOv');
+    ov.style.gridTemplateColumns = `repeat(${COLS},1fr)`;
+    ov.style.gridTemplateRows = `repeat(${ROWS},1fr)`;
+    ov.innerHTML = '';
+    for (let i = 0; i < COLS * ROWS; i++) {
+      const cell = document.createElement('div'); cell.className = 'cell';
+      const sel = document.createElement('button');
+      sel.disabled = true; sel.style.cursor = 'default';
+      sel.textContent = state.cells.num[i] === 1 ? 'p. 1 · copertina' : 'p. ' + state.cells.num[i];
+      const btn = document.createElement('button'); btn.textContent = '↻'; btn.title = 'Ruota di 90°';
+      const lab = document.createElement('span'); lab.className = 'rot'; lab.textContent = state.cells.rot[i] + '°';
+      btn.addEventListener('click', () => {
+        state.cells.rot[i] = (state.cells.rot[i] + 90) % 360; lab.textContent = state.cells.rot[i] + '°';
+        buildOutputs();
+      });
+      cell.append(sel, btn, lab); ov.appendChild(cell);
+    }
+  }
+
+  // ---------- estrazione e composizione ----------
+  function cropCell(i) {
+    const src = state.sheetCanvas;
+    const c = i % COLS, r = Math.floor(i / COLS);
+    const x0 = Math.round(c * src.width / COLS), x1 = Math.round((c + 1) * src.width / COLS);
+    const y0 = Math.round(r * src.height / ROWS), y1 = Math.round((r + 1) * src.height / ROWS);
+    const w = x1 - x0, h = y1 - y0, rot = state.cells.rot[i];
+    const out = document.createElement('canvas');
+    const swap = rot === 90 || rot === 270;
+    out.width = swap ? h : w; out.height = swap ? w : h;
+    const ctx = out.getContext('2d');
+    ctx.translate(out.width / 2, out.height / 2);
+    ctx.rotate(rot * Math.PI / 180);
+    ctx.drawImage(src, x0, y0, w, h, -w / 2, -h / 2, w, h);
+    out.pxPerMm = src.pxPerMm;
+    return cleanEdges(out);
+  }
+
+  // ---------- pulizia linee di taglio ----------
+  // Su ogni lato analizza una fascia di ~2,5 mm: stima il colore della carta
+  // (mediana della fascia), individua le righe/colonne "sporche" (linee continue,
+  // tratteggiate, crocini) e le ricopre col colore della carta. Se il lato è
+  // un'immagine al vivo (molto inchiostro anche più all'interno) non lo tocca.
+  function cleanEdges(canvas) {
+    const auto = $('clean').value === 'auto';
+    const trimMm = Math.max(0, Math.min(8, +$('trim').value || 0));
+    if (!auto && !trimMm) return canvas;
+    const W = canvas.width, H = canvas.height;
+    const ppm = canvas.pxPerMm || (Math.max(W, H) / 105);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const img = ctx.getImageData(0, 0, W, H), d = img.data;
+    const band = Math.max(4, Math.round(2.5 * ppm));
+    const trim = Math.round(trimMm * ppm);
+    // lato: 0 alto, 1 basso, 2 sinistra, 3 destra. (k = profondità, t = posizione lungo il lato)
+    const sides = [
+      { len: W, depth: H, idx: (k, t) => (k * W + t) * 4 },
+      { len: W, depth: H, idx: (k, t) => ((H - 1 - k) * W + t) * 4 },
+      { len: H, depth: W, idx: (k, t) => (t * W + k) * 4 },
+      { len: H, depth: W, idx: (k, t) => (t * W + (W - 1 - k)) * 4 },
+    ];
+    const INK = 40;
+    for (const s of sides) {
+      const scan = Math.min(band, Math.floor(s.depth / 6));
+      const step = Math.max(1, Math.floor(s.len / 600));
+      // colore carta = mediana su fascia 0..2*scan
+      const rs = [], gs = [], bs = [];
+      for (let k = 0; k < scan * 2; k += 2) for (let t = 0; t < s.len; t += step * 3) {
+        const i = s.idx(k, t); rs.push(d[i]); gs.push(d[i+1]); bs.push(d[i+2]);
+      }
+      const med = a => { a.sort((x, y) => x - y); return a[a.length >> 1]; };
+      const bg = [med(rs), med(gs), med(bs)];
+      const inkFrac = k => {
+        let n = 0, tot = 0;
+        for (let t = 0; t < s.len; t += step) {
+          const i = s.idx(k, t); tot++;
+          if (Math.max(Math.abs(d[i]-bg[0]), Math.abs(d[i+1]-bg[1]), Math.abs(d[i+2]-bg[2])) > INK) n++;
+        }
+        return n / tot;
+      };
+      let clear = trim;
+      if (auto) {
+        // lato al vivo? controlla la fascia subito più interna
+        let inner = 0; for (let k = scan; k < scan * 2; k++) inner += inkFrac(k);
+        const busy = inner / scan > 0.35;
+        if (!busy) {
+          let deepest = -1;
+          for (let k = 0; k < scan; k++) if (inkFrac(k) > 0.015) deepest = k;
+          if (deepest >= 0) clear = Math.max(clear, deepest + 2); // +antialias
+        }
+      }
+      clear = Math.min(clear, Math.floor(s.depth / 4));
+      for (let k = 0; k < clear; k++) for (let t = 0; t < s.len; t++) {
+        const i = s.idx(k, t); d[i] = bg[0]; d[i+1] = bg[1]; d[i+2] = bg[2]; d[i+3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+  }
+
+  function clonePage(src) {
+    const c = document.createElement('canvas'); c.width = src.width; c.height = src.height;
+    c.getContext('2d').drawImage(src, 0, 0); c.pxPerMm = src.pxPerMm;
+    return cleanEdges(c);
+  }
+
+  function compose(pageCanvas) {
+    const W = +$('size').value, H = Math.round(W * 1.25);
+    const m = Math.max(0, Math.min(30, +$('margin').value || 0)) / 100;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = $('bg').value; ctx.fillRect(0, 0, W, H);
+    const availW = W * (1 - 2 * m), availH = H * (1 - 2 * m);
+    const s = Math.min(availW / pageCanvas.width, availH / pageCanvas.height);
+    const dw = Math.round(pageCanvas.width * s), dh = Math.round(pageCanvas.height * s);
+    const dx = Math.round((W - dw) / 2), dy = Math.round((H - dh) / 2);
+    if ($('shadow').checked) {
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.22)'; ctx.shadowBlur = W * 0.02; ctx.shadowOffsetY = W * 0.006;
+      ctx.fillStyle = '#fff'; ctx.fillRect(dx, dy, dw, dh); ctx.restore();
+    }
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(pageCanvas, dx, dy, dw, dh);
+    if ($('stroke').checked) {
+      ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = Math.max(1, W / 1080);
+      ctx.strokeRect(dx + .5, dy + .5, dw - 1, dh - 1);
+    }
+    return c;
+  }
+
+  const toBlob = (c, q) => new Promise(res => c.toBlob(res, 'image/jpeg', q));
+
+  let buildToken = 0;
+  async function buildOutputs() {
+    const token = ++buildToken;
+    let items; // [{n, canvas}]
+    if ($('mode').value === 'sheet') {
+      if (!state.sheetCanvas) return;
+      items = Array.from({length: COLS * ROWS}, (_, i) => ({ n: state.cells.num[i], canvas: cropCell(i) }))
+        .sort((a, b) => a.n - b.n);
+      const dup = items.map(x => x.n).filter((n, i, a) => a.indexOf(n) !== i);
+      if (dup.length) status('Attenzione: numeri di pagina ripetuti (' + [...new Set(dup)].join(', ') + ').', true);
+      else if (state.sheetCanvas.width >= state.sheetCanvas.height) status('');
+    } else {
+      items = state.pageCanvases.map((canvas, i) => ({ n: i + 1, canvas: clonePage(canvas) }));
+    }
+    const q = +$('quality').value;
+    const outs = [];
+    for (const it of items) {
+      const blob = await toBlob(compose(it.canvas), q);
+      if (token !== buildToken) return;
+      outs.push({ n: it.n, blob });
+    }
+    state.outputs.forEach(o => URL.revokeObjectURL(o.url));
+    outs.forEach(o => o.url = URL.createObjectURL(o.blob));
+    // nomi univoci anche con numeri ripetuti
+    const seen = {};
+    outs.forEach(o => { seen[o.n] = (seen[o.n] || 0) + 1; o.name = `${state.baseName}_${String(o.n).padStart(2,'0')}${seen[o.n] > 1 ? '_' + seen[o.n] : ''}.jpg`; });
+    state.outputs = outs;
+    renderOutputs();
+  }
+
+  function renderOutputs() {
+    const out = $('out'); out.innerHTML = '';
+    state.outputs.forEach((o, idx) => {
+      const t = document.createElement('div'); t.className = 'tile';
+      t.innerHTML = `<img alt="Pagina ${o.n}" src="${o.url}"><div class="row"><span>${idx + 1}. pagina ${o.n} · ${Math.round(o.blob.size/1024)} KB</span></div>`;
+      const b = document.createElement('button'); b.className = 'btn ghost small'; b.textContent = 'Scarica';
+      b.addEventListener('click', () => save(o.name, o.blob));
+      t.querySelector('.row').appendChild(b);
+      out.appendChild(t);
+    });
+  }
+
+  // ---------- download ----------
+  async function save(filename, blob) {
+    const st = $('dlStatus');
+    if (downloads) {
+      try { await downloads.save({ filename, data: blob }); st.textContent = 'Salvato: ' + filename; return; }
+      catch (e) {
+        if (e && e.code === 'declined') { st.textContent = 'Download annullato.'; return; }
+        if (e && e.code === 'rate_limited') { st.textContent = 'Un download è già in attesa di conferma.'; return; }
+        if (e && !['unavailable','not_granted','capability_disabled','capability_removed'].includes(e.code)) {
+          st.textContent = 'Download non riuscito: ' + (e.message || e.code); return;
+        }
+      }
+    }
+    // fallback: link diretto (funziona fuori dalla cornice sandbox)
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    st.textContent = 'Se il download non parte, tieni premuto (o clic destro) su un’immagine per salvarla.';
+  }
+
+  $('zipBtn').addEventListener('click', async () => {
+    if (!state.outputs.length) return;
+    const b = $('zipBtn'); b.disabled = true; $('dlStatus').textContent = 'Preparo lo ZIP…';
+    try {
+      const zip = new JSZip();
+      state.outputs.forEach(o => zip.file(o.name, o.blob));
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+      $('dlStatus').textContent = '';
+      await save(`${state.baseName}_instagram.zip`, blob);
+    } finally { b.disabled = false; }
+  });
+
+  // ---------- controlli ----------
+  ['mode','sheetRot','pdfPage','size'].forEach(id => $(id).addEventListener('change', () => state.pdf && refreshSource()));
+  ['margin','bg','quality','shadow','stroke','clean','trim'].forEach(id => $(id).addEventListener('input', () => state.pdf && buildOutputs()));
+})();
+</script>
+</body>
+</html>
